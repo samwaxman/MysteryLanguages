@@ -1,9 +1,0 @@
-#lang racket
-(require "../ML-lib/ML-Helpers.rkt")
-(provide #%module-begin #%datum #%top #%app)
-
-(setup-all-reader (FC1 FC2 FC3)
-                  ("\\------Core 1------\\" "\\------Core 2------\\" "\\------Core 3------\\")
-                  #:let #:+ #:- #:* #:/
-                  #:> #:< #:>= #:<= #:== #:!= #:++
-                  #:if #:func #:reassign)
