@@ -1,0 +1,1 @@
+(module info setup/infotab (#%module-begin (define assume-virtual-sources #t) (define package-content-state (quote (binary "6.10"))) (define deps (list "beautiful-racket" "megaparsack")) (define collection (quote multi))))
