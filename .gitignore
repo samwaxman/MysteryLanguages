@@ -1,2 +1,6 @@
-**.bak
-**README**
+*
+!info.rkt
+!*.dep
+!*.zo
+
+!*/
