@@ -2,6 +2,6 @@
 !info.rkt
 !*.dep
 !*.zo
-**README**
+*README*
 
 !*/
