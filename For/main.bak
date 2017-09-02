@@ -1,0 +1,43 @@
+#lang racket
+(provide #%module-begin #%datum #%top #%app)
+
+(module reader racket
+  (require (prefix-in ML- "../ML-lib/For/For1.rkt")
+           (prefix-in ML2- "../ML-lib/For/For2.rkt")
+           "../ML-lib/Parser/FullErrorParser.rkt"
+           "../ML-lib/Parser/getInfo.rkt"
+           syntax/module-reader)
+  (provide (rename-out [ML-read-syntax read-syntax]
+                       [ML-read read]
+                       )
+           get-info)
+  (define (ML-read-syntax _ in)  (let* ([in-str (port->string in)]
+                                        [copy1 (open-input-string in-str)]
+                                        [copy2 (open-input-string in-str)])
+                                   
+                                   (define parse1 (ML-parse (object-name in) copy1 'For1 'lang1
+                                           #:let #'ML-let #:+ #'ML-+ #:- #'ML-- #:/ #'ML-/ #:* #'ML-*
+                                           #:++ #'ML-++ #:== #'ML-== #:!= #'ML-!= #:< #'ML-< #:> #'ML-> #:>= #'ML->= #:<= #'ML-<=
+                                           #:func #'ML-func #:if #'ML-if #:reassign #'ML-reassign #:list #'ML-list #:for #'ML-for
+                                           #:lambda #'ML-lambda))
+                                   (define parse2 (ML-parse (object-name in) copy2 'For2 'lang2
+                                           #:let #'ML2-let #:+ #'ML2-+ #:- #'ML2-- #:/ #'ML2-/ #:* #'ML2-*
+                                           #:++ #'ML2-++ #:== #'ML2-== #:!= #'ML2-!= #:< #'ML2-< #:> #'ML2-> #:>= #'ML2->= #:<= #'ML2-<=
+                                           #:func #'ML2-func #:if #'ML2-if #:reassign #'ML2-reassign #:list #'ML2-list #:for #'ML2-for
+                                           #:lambda #'ML2-lambda))
+                                   (with-syntax ([p1 parse1] [p2 parse2])
+          
+                                     (let ([to-print 
+                                            #`(module ForAll racket p1 p2
+                                                (define prompt-tag (make-continuation-prompt-tag))
+                                                (display "<<<<LANGUAGE 1>>>>\n")
+                                                (call-with-continuation-prompt (lambda ()
+                                                                                 (call-with-exception-handler (lambda (x) (abort-current-continuation prompt-tag x)) (lambda () (dynamic-require '(submod 'ForAll lang1) #f))))
+                                                                                 prompt-tag (lambda (v) (display (string-append "ERROR:" (vector-ref (struct->vector v) 1) "\n"))))
+                                                (display "<<<<LANGUAGE 2>>>>\n")
+                                                (call-with-continuation-prompt (lambda ()
+                                                                                 (call-with-exception-handler (lambda (x) (abort-current-continuation prompt-tag x)) (lambda () (dynamic-require '(submod 'ForAll lang2) #f))))
+                                                                               prompt-tag (lambda (v) (display (string-append "ERROR:" (vector-ref (struct->vector v) 1) "\n")))))])
+                                       
+                                       to-print))))
+  (define (ML-read in) (syntax->datum (ML-read-syntax #f in))))

@@ -1,0 +1,192 @@
+#lang racket
+(require racket/pretty)
+(require racket/format (for-syntax racket/format))
+(provide ~my-s
+         setup-printer
+         check-contract
+         unprefix-out
+         #%arity-app
+         unbound
+         make-shared-variable)
+
+
+;;PRINTER UTILITIES
+;Determines how to print things like numbers and lists
+;sets the global printer handler to use these settings
+
+
+;Takes a number and chops any digits past
+;the -10'th power off. Allows numbers like
+;9001.001 which, when inexact is really something like
+;9001.0010... get correctly displayed
+(define (chop-lower num)
+  (/ (round (* num #e1e10)) #e1e10))
+
+;Only works on decimals
+;Converts a number to scientific notation
+(define (to-sci num)
+  (define (helper inner-num place)
+    (let ([next-num (* 10 inner-num)])
+      (if (>= (* (sgn next-num) next-num) 1)
+          (~a
+           (number->string next-num)
+           "e"
+           place)
+          (helper next-num (- place 1)))))
+  (helper num -1))
+
+;Takes a number and determines how to print it
+(define (num->decimal-string num)
+
+  ;Takes in a number and converts it to a decimal form
+  ;Should only be used on exact numbers
+  (define (num->decimal-string-helper num place string)
+    (if (= num 0) (if (= place 1) "0" string)
+        (begin
+        (when (= place 2) (set! string (string-append string ".")))
+        (if (= place 12) (string-append string "...")
+        (let ([trunc-num (truncate num)])
+          (num->decimal-string-helper (* 10 (- num trunc-num)) (+ place 1) (string-append string (number->string trunc-num))))))))
+  
+  (cond
+    ;If very small, we'd like to print it in scientific notation
+    [(and (not (eq? 0 num)) (<= num #e1e-7) (>= num #e-1e-7)) (to-sci num)]
+    ;if inexact, we'll chop off lower order parts then print
+    [(inexact? num) (num->decimal-string-helper (chop-lower (inexact->exact num)) 1 "")]
+    [else (num->decimal-string-helper num 1 "")]))
+
+;Prints lists
+(define (list-to-string list)
+  (define (fold-function x acc)
+    (cond
+      [(null? acc)
+       (string->list (~a x))]
+      [(cons? acc)
+       (append acc (string->list (~a #\, #\space x )))]))
+  (let ([inner-list (foldl fold-function '() list)])
+    (string-append "[list: " (list->string inner-list) "]")))
+
+;Determines the printed representation of an object.
+(define (~my-s obj)
+  (cond
+    [(number? obj)
+     (cond
+       [(infinite? obj) (if (= (sgn obj) 1) "Inf" "-Inf")]
+       [(nan? obj) "NaN"]
+       [(real? obj) (num->decimal-string obj)]
+       [else (number->string obj)])] ;shouldn't ever be called.
+    [(boolean? obj) (if obj "true" "false")]
+    ;Will eventually want to print as #<procedure:proc-name>
+    [(procedure? obj) "#<procedure>"]
+    [(list? obj) (list-to-string obj)]
+    [else (~s obj)]))
+
+;Only used once for printing function names
+;If need be, can be made more rigorous and used
+;in other places
+(define (~my-a obj)
+  (if (or (string? obj) (symbol? obj)) (~a obj)
+      (~my-s obj)))
+
+;Sets the printer to use the print settings above
+;if placed inside module-begin, likely doesn't need to be unhygienic
+(define-syntax (setup-printer stx)
+  (syntax-case stx ()
+    [_ (datum->syntax stx '(global-port-print-handler (lambda (a b) (display (~my-s a) b))) stx)]))
+
+
+;;CONTRACTS
+
+;Checks the contract for a specific value. Prints an error message
+;if it fails.
+(define-syntax-rule (check name arg condition cond-name arg-num)
+  (if (condition arg) (values)
+      (raise-user-error (~a name " expected " cond-name " for argument " arg-num ". Recieved " (~my-s arg) "."))))
+
+;Checks an entire contract by checking the contracts on each value
+(define-syntax-rule (check-contract name (arg ...) (condition ...) (cond-name ...))
+     (let ([arg-num 1])
+       (let ([enforce (lambda (ar con con-name) (check name ar con con-name arg-num))])
+         (begin (enforce arg condition cond-name) (set! arg-num (+ arg-num 1))) ...)))
+
+;;Unprefix-out
+(require (for-syntax syntax/parse))
+(require (for-syntax racket/provide-transform))
+(require (for-syntax (only-in racket drop)))
+(require racket/provide)
+
+;A provide macro that makes life easier when importing and exporting MLs
+;NOTE, it's good for what it's intended, but you can run into a bugs if you try
+;getting too fancy with it.
+
+;Drops the number of characters in the given id from each item
+;imported from the given file, then exports them
+(define-syntax unprefix-out
+  (make-provide-pre-transformer
+   (lambda (stx modes)
+     (syntax-parse stx
+       [(_ id module-path)
+        (pre-expand-export
+         #'(filtered-out
+            (lambda (id-string)
+              (list->string (drop (string->list id-string)
+                                  (string-length (symbol->string 'id)))))
+            (all-from-out module-path)) modes)]))))
+
+;;#%APP OVERRIDE
+;;Making an #%app with custom error messages
+
+;Gets the name of an object.
+(define (name obj)
+  (if (object-name obj) (object-name obj) (~my-a obj)))
+
+;#%app, but gives clean errors when you try to apply a non
+;procedure, or when you apply a procedure to the wrong number
+;of arguments
+
+;If object has an object-name, then it will be used when printing
+;otherwise, it will print as normal with the printer above
+(define-syntax-rule (#%arity-app proc args ...)
+  (let ([ex-proc proc])
+    (if (procedure? proc)
+        (let ([arity (procedure-arity ex-proc)]
+              [given (length (list 'args ...))])
+          (if (arity-includes? arity given)
+              (#%app proc args ...)
+              (raise-user-error (~a (name ex-proc) ": expected " arity " arguments. Given " given "."))))
+        (raise-user-error
+         (~a "Attempted to apply " (name ex-proc) " to arguments, but it is not a procedure.")))))
+
+;Default syntax-transformer binding
+(define-syntax (unbound stx)
+  (syntax-parse stx
+    [_ #'(error "Unbound syntax parameter")]))
+
+
+;For making shared-variables in a language set.
+;Makes a variable with a certain number of arguments
+;bound to an error
+
+;Makes a setter that allows it to be set by the languages
+;Essentially a parameter, but there is no splicing-parameterize
+;so this is used instead.
+(define-syntax (make-shared-variable stx)
+  (syntax-parse stx
+    [(_ var-name args ...)
+     (with-syntax ([setter-name
+                    (string->symbol (~a
+                                     (syntax->datum #'var-name)
+                                     "-setter"))])
+       (datum->syntax stx
+                      (syntax->datum
+                       #'(begin
+                           (define (var-name args ...)
+                             (error (~a "Unbound shared variable: " 'var-name)))
+                           (define (setter-name new-val) (set! var-name new-val))))))]))
+         
+                      
+
+
+
+
+

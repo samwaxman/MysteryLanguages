@@ -1,0 +1,48 @@
+#lang racket
+;THIS LANGUAGE HAS COBOL-LIKE FUNCTION CALLS
+;EACH FUNCTION HAS A SPOT TO STORE ITS RETURN ADRESS
+;WHEN CALLED. IF IT'S USED RECURSIVELY, THIS RETURN ADRESS
+;GETS OVERWRITTEN AND RESULTS IN INFINITE LOOPS.
+
+(require (prefix-in Cond- "../Conditionals/Conditionals3.rkt")
+         "../ML-Helpers.rkt"
+         "FunctionCallsHelpers.rkt")
+(provide
+ (rename-out [my-app #%app]
+             [my-mod #%module-begin])
+ (except-out (unprefix-out Cond- "../Conditionals/Conditionals3.rkt")
+             Cond-#%app Cond-#%module-begin)
+ func)
+
+;The return adress is mutable, and each procedure only has one.
+;That way it can be overwritten.
+(struct procedure (lam (continuation #:mutable)))
+
+
+;If the continuation is overwritten via recursion,
+;will loop forever (except the fuel with cause it to error)
+(define-syntax-rule (func name (args ...) body ... last-body)
+  (begin
+    (define name
+      (procedure (procedure-rename (lambda (args ...)
+                  (call/cc (lambda (k)
+                             (set-procedure-continuation! name k)
+                             ;;This one is so we decrement on infinite recursion
+                             (check-decrement-fuel)
+                             (let ([result ((lambda () body ... last-body))])
+                               ;;this one is so we decrement on terminated recursion
+                               (check-decrement-fuel)
+                               ((procedure-continuation name) result))))) 'name)
+ ;Initializing the continuation to #f. Any value will do.
+                #f))))
+
+;If you're trying to apply a procedure struct,
+;apply its lambda instead.
+(define-syntax-rule (my-app proc args ...)
+  (if (procedure? proc)
+      (#%arity-app (procedure-lam proc) args ...)
+      (#%arity-app proc args ...)))
+
+(define-syntax-rule (my-mod body ...)
+  (Cond-#%module-begin (fill-tank) body ...))
+

@@ -1,0 +1,35 @@
+#lang racket
+(require (for-syntax syntax/parse))
+(require "../ML-Helpers.rkt")
+(require (prefix-in MV3- "../MutableVars/MutableVars3.rkt"))
+(require "fields-common-base.rkt")
+(require "../testPrinter.rkt")
+(provide
+ record
+ reassign-field
+ access
+ (unprefix-out MV3- "../MutableVars/MutableVars3.rkt")
+ (all-from-out "../testPrinter.rkt")
+ )
+
+
+
+
+(define-syntax-rule (field-condition field)
+  (values #t field))
+(define-syntax-rule (field-trans field)
+  (~my-a field))
+;value, and return transformer
+(define-syntax-rule (id-trans x)
+  x)
+
+;Can't happen - no values are dissallowed (condition is #t)
+(define (on-create-bad-field) (void))
+(define (on-access-bad-field) (void))
+
+
+(rec-creator id-trans)
+(record-creator field-condition field-trans id-trans on-create-bad-field)
+(access-creator field-condition field-trans id-trans on-access-bad-field)
+(reassign-field-creator field-condition field-trans id-trans id-trans on-access-bad-field)
+(setup-printer)

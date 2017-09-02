@@ -1,0 +1,38 @@
+#lang racket
+(require (for-syntax syntax/parse))
+(require "../ML-Helpers.rkt")
+(require (prefix-in MV3- "../MutableVars/MutableVars3.rkt"))
+(require "fields-common-base.rkt")
+(require "../testPrinter.rkt")
+(provide
+ record
+ reassign-field
+ access
+ (unprefix-out MV3- "../MutableVars/MutableVars3.rkt")
+ (all-from-out "../testPrinter.rkt")
+ )
+
+
+
+
+(define-syntax-rule (field-cond field)
+  (values
+  (string? (syntax->datum #'field))
+  field))
+(define-syntax-rule (return-trans x)
+  (x))
+(define-syntax-rule (value-trans x)
+  (lambda () x))
+;field trans
+(define-syntax-rule (iden-trans x)
+  x)
+
+(define (on-create-bad-field _) (raise-user-error "Record fields must be strings."))
+(define (on-access-bad-field _) (raise-user-error "Field access must use strings."))
+
+
+(rec-creator return-trans)
+(record-creator field-condition id-trans value-create-trans on-create-bad-field)
+(access-creator field-condition id-trans return-trans on-access-bad-field)
+(reassign-field-creator field-condition id-trans value-reassign-trans return-trans on-access-bad-field)
+(setup-printer)

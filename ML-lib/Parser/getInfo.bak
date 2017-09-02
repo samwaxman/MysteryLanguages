@@ -1,0 +1,10 @@
+#lang racket
+(require "Indenter.rkt")
+(provide get-info)
+(define (get-info port src-mod src-line src-col src-pos)
+    (define (handle-query key default)
+      (case key
+        [(drracket:indentation)
+         indent-ML]
+        [else default]))
+    handle-query)

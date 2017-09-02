@@ -1,0 +1,82 @@
+#lang racket
+(provide testI
+         test-num
+         test-failed
+         inc-test-num
+         inc-test-failed
+         recap
+         testE
+         testSynE
+         side-effect)
+
+(require "ML-Helpers.rkt")
+(require syntax/macro-testing)
+(define test-num 1)
+(define test-failed 0)
+(define (inc-test-num) (set! test-num (+ 1 test-num)))
+(define (inc-test-failed) (set! test-failed (+ 1 test-failed)))
+
+
+(define (test-string-equality expected produced)
+  (if (string=? expected produced)
+      (display (~a "Test " test-num " passed.\n"))
+      (begin (display (~a "Test " test-num " failed. Was expecting " expected " but got " produced ".\n"))
+             (inc-test-failed)))
+  (inc-test-num))
+
+(define-syntax-rule (testI expected prog-first program ...)
+  (let ([produced (let () prog-first program ...)])
+    (test-string-equality expected (~my-s produced))))
+
+(define (recap)
+  (display (~a "\n" (- test-num test-failed 1) '/ (- test-num 1) " passed.")))
+
+(define prompt-tag (make-continuation-prompt-tag))
+
+(define-syntax-rule (testE check-against prog-first prog ...)
+  (call-with-continuation-prompt
+   (lambda ()
+     (call-with-exception-handler
+      (lambda (x) (abort-current-continuation prompt-tag x))
+      (lambda () prog-first prog ...)))
+   prompt-tag
+   (lambda (v)
+     (test-string-equality
+      check-against
+      (vector-ref (struct->vector v) 1)))))
+
+
+;The double cases was so that definitions wouldn't be the last thing
+;in a begin block. Not sure it helps though.
+(define-syntax (testSynE stx)
+  (syntax-case stx ()
+    [(_ check-against prog)
+     #'(call-with-continuation-prompt
+      (lambda ()
+        (call-with-exception-handler
+         (lambda (x) (abort-current-continuation prompt-tag x))
+         (lambda () (convert-compile-time-error prog))))
+      prompt-tag (lambda (v)
+                   (test-string-equality
+                    check-against
+                    (vector-ref (struct->vector v) 1))))]
+    [(_ check-against prog-first prog ...)
+     #'(call-with-continuation-prompt
+      (lambda ()
+        (call-with-exception-handler
+         (lambda (x) (abort-current-continuation prompt-tag x))
+         (lambda () (convert-compile-time-error (begin prog-first prog ...)))))
+      prompt-tag (lambda (v)
+                   (test-string-equality
+                    check-against
+                    (vector-ref (struct->vector v) 1))))]))
+
+
+
+;;Good for testing if things get evaluated only once
+;;Probably want to make one to test that things get evaluated
+;;in the proper order as well.
+(define (side-effect num)
+  (begin
+    (printf "HERE!")
+    num))

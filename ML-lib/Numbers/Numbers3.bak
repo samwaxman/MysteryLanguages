@@ -1,0 +1,83 @@
+#lang racket
+(require
+  (only-in
+   racket [+ r+] [- r-] [* r*] [/ r/] [let r-let])
+  "../ML-Helpers.rkt"
+  "NumbersSetup.rkt"
+  "../testPrinter.rkt"
+  (for-syntax syntax/parse))
+(provide
+ (rename-out [ML-let #%let] [ML+ #%+] [ML- #%-][ML* #%*] [ML/ #%/]
+             ;Arity app is defined in ML-Helpers
+             ;It display better arity error messages
+             [#%arity-app #%app]
+             [my-mod #%module-begin]
+             [overflow-datum #%datum])
+ #%top
+ #%id
+ #%block
+ NumberMode
+ (all-from-out "../testPrinter.rkt"))
+
+;THIS LANGUAGE'S READER READS IN NUMBERS THAT ARE
+;INTEGERS AS EXACT AND OTHER NUMS AS INEXACT (like racket)
+;This flag lets the reader know that
+(define NumberMode 'racket)
+
+;;Making numbers that act like 64 bit integers
+
+;If the user enters a number outside our range
+;it gets overflowed
+;The reader reads everything as an exact num.
+;This will make non-integers be treated as inexact.
+(define-syntax-rule (overflow-datum . dat)
+  (overflow 'dat))
+
+
+;These are the maximum and minimum representable integers
+;using 64 bits
+(define int-max 9223372036854775807)
+(define int-min -9223372036854775808)
+;This is the total number of integers we can represent in 64 bits
+(define num-total (r+ (r- int-max int-min) 1))
+
+;This function implements wrapping. If a number overflows, or goes
+;over the max int/under the min int, it moves it back between them
+;in the way that a regular 64 bit int would do this.
+(define (overflow num)
+  (if (exact-integer? num)
+      (let ([flow-num (modulo num num-total)])
+        (if (<= flow-num int-max) flow-num (r- flow-num num-total)))
+      num))
+
+
+;;Not a need to use overflow. If we use quotient, the result is smaller than either number in
+;;absolute value, and thus cannot be over max or under min. If the result is the regular divide,
+;;we're using floats, and we don't need to overflow.
+(define (divide a b)
+  (if (and (exact-integer? a) (exact-integer? b))
+      (if (= b 0)
+          ;Cant divide by 0 if using ints
+          (raise-user-error "Error: Division by zero.")
+          (quotient a b))
+      ;Weirdly enough, 1.0 / 0 in racket is an error.
+      ;The floating point contagion doesn't seem to come
+      ;before the 0 is checked
+      (if (= 0 b) (r/ a 0.0)
+          (r/ a b))))
+(define (add a b)
+  (overflow (r+ a b)))
+(define (subtract a b)
+  (overflow (r- a b)))
+(define (multiply a b)
+  (overflow (r* a b)))
+
+(define-syntax-rule (my-mod body ...)
+  (#%module-begin
+   (setup-printer)
+   (add-setter add)
+   (subtract-setter subtract)
+   (multiply-setter multiply)
+   (divide-setter divide)
+   (let ()
+     body ...)))

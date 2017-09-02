@@ -1,0 +1,40 @@
+#lang NumAll
+~testI("|2", side-effect(2))
+~testI("|2", side-effect(1) + 1)
+~testI("|2", 1 + side-effect(1))
+~testI("||2",side-effect(1) + side-effect(1))
+
+~testI("|0", side-effect(1) - 1)
+~testI("|0", 1 - side-effect(1))
+~testI("||0",side-effect(1) - side-effect(1))
+
+~testI("|1", side-effect(1) / 1)
+~testI("|1", 1 / side-effect(1))
+~testI("||1",side-effect(1) / side-effect(1))
+
+~testI("|1", side-effect(1) * 1)
+~testI("|1", 1 * side-effect(1))
+~testI("||1", side-effect(1) * side-effect(1))
+
+~testI("|2",
+block:
+  a = side-effect(2)
+a end)
+
+~testI("|1",
+block:
+  a = 2
+side-effect(1) end)
+
+~testI("||2",
+block:
+  a = 2
+  side-effect(1)
+side-effect(2) end)
+
+~testI("0", 0)
+~testI("0", 0.0)
+~testI("0", -0)
+~testI("0", -0.0)
+
+recap()

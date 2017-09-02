@@ -1,0 +1,12 @@
+#lang racket
+;This prefix is so this module doesn't use the #%module-begin #%top etc
+;defined in those files.
+(require (prefix-in ML- "../ML-lib/FunctionCalls/FunctionCalls2.rkt")
+         "../ML-lib/ML-Helpers.rkt")
+(provide (unprefix-out ML- "../ML-lib/FunctionCalls/FunctionCalls2.rkt"))
+
+
+(setup-reader 'FC2  #:let #:+ #:- #:* #:/
+              #:> #:< #:>= #:<= #:== #:!= #:++
+              #:if #:func #:reassign)
+

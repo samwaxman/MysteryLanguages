@@ -1,0 +1,9 @@
+#lang racket
+(require "../ML-Lib/ML-Helpers.rkt")
+(provide #%module-begin #%datum #%top #%app)
+
+(setup-all-reader (For1 For2)
+                  ("------Core1------" "------Core2------")
+                  #:let #:+ #:- #:* #:/
+                  #:> #:< #:>= #:<= #:== #:!= #:++
+                  #:if #:record #:lambda #:func #:reassign)

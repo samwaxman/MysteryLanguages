@@ -1,0 +1,9 @@
+#lang racket
+(require "../ML-Helpers.rkt")
+(define first(x)
+  (if (cons? x) (car x)
+      (raise-user-error (~a "first expected a non-empty list, but was given" (~my-a x)))))
+
+(define rest(x)
+  (if (cons? x) (cdr x)
+      (raise-user-error (~a "rest expected a non-empty list, but was given" (~my-a x)))))

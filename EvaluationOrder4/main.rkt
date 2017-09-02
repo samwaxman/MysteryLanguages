@@ -1,0 +1,11 @@
+#lang racket
+;This prefix is so this module doesn't use the #%module-begin #%top etc
+;defined in those files.
+(require (prefix-in ML- "../ML-lib/EvaluationOrder/EvaluationOrder4.rkt")
+         "../ML-lib/ML-Helpers.rkt")
+(provide (unprefix-out ML- "../ML-lib/EvaluationOrder/EvaluationOrder4.rkt"))
+
+
+(setup-reader EvaluationOrder4 #:let #:+ #:- #:* #:/
+              #:> #:< #:>= #:<= #:== #:!= #:++
+              #:if #:func #:lambda #:record)

@@ -1,0 +1,27 @@
+#lang racket
+
+;;BY REFERENCE (function paramaters variable alias)
+
+
+(require (prefix-in Cond- "../Conditionals/Conditionals3.rkt")
+         "../ML-Helpers.rkt"
+         "MV1and2Comminalities.rkt"
+         (for-syntax syntax/parse))
+(provide
+ (rename-out [my-app #%app])
+ (except-out (unprefix-out Cond- "../Conditionals/Conditionals3.rkt")
+             Cond-#%let Cond-#%app Cond-#%id)
+ #%let
+ #%reassign
+ #%func
+ #%id
+ #%reassign)
+
+
+
+(define-syntax-rule (my-app proc arg ...)
+  (let ([evaluated-proc proc])
+    (if (function? evaluated-proc)
+        (#%arity-app (function-lam evaluated-proc) (expand-arg arg) ...)
+        (#%arity-app evaluated-proc arg ...))))
+

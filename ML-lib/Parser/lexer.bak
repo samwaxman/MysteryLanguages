@@ -1,0 +1,112 @@
+#lang racket
+(require parser-tools/lex
+         (prefix-in : parser-tools/lex-sre))
+(require syntax/srcloc)
+(provide lex)
+
+(define-tokens value-tokens (Number Identifier String Operator))
+(define-empty-tokens op-tokens (newline = reassign end-of-file comma colon
+                                        left-paren right-paren
+                                        left-bracket right-bracket
+                                        left-brace right-brace comment
+                                        space))
+
+(define-lex-abbrevs
+  (alph (:or (:/ "a" "z")
+             (:/ "A" "Z")))
+  (id-chars (:or "+" "-" "_" "/" "*"))
+  (digit (:/ "0" "9"))
+  (identifier (:: (:or alph
+                       id-chars)
+                  (:* (:or
+                       digit
+                       id-chars
+                       alph))))
+  (non-id-operator (:or "==" "<" ">" ">=" "<=" "!="))
+  
+  (unsigned-real  (::(:+ digit)
+                     (:? (:: "."
+                             (:+ digit)))))
+  (number (:or
+           "NaN"
+           (:: (:? "-")
+              (:or
+               "Inf"
+               unsigned-real))))
+  (space (:+ (:- whitespace
+             #\newline)))
+
+  (string (:: #\"
+              (:*
+               (:or
+                "\\\""
+                (:/ #\space #\!)
+                (:/ #\# #\[)
+                (:/ #\] #\~)))
+              #\"))
+  (line-comment (:: #\;
+                    (:* (:- any-char
+                            #\newline))
+                    #\newline))
+  (reassign (:: #\: #\=)))
+(define (replace-inner-quotes string)
+  (string-replace string "\\\"" "\""))
+(define (format-string-lexeme string)
+  (replace-inner-quotes
+   (substring string 1
+              (- (string-length string) 1))))
+
+
+
+  (define lexer
+  (lexer-src-pos
+   [(eof) (token-end-of-file)]
+   [reassign (token-reassign)]
+   [#\( (token-left-paren)]
+   [#\) (token-right-paren)]
+   [#\[ (token-left-bracket)]
+   [#\] (token-right-bracket)]
+   [#\{ (token-left-brace)]
+   [#\} (token-right-brace)]
+   [#\, (token-comma)]
+   [#\: (token-colon)]
+   [#\newline (token-newline)]
+   [non-id-operator (token-Operator lexeme)]
+   [#\= (token-=)]
+   [space (token-space)]
+   [line-comment (token-comment)]
+   [number (token-Number lexeme)]
+   [identifier (token-Identifier (string->symbol lexeme))]
+   [string (token-String (format-string-lexeme lexeme))]))
+
+
+(define (lex in chars-in-lang)
+  (port-count-lines! in)
+  (file-path (object-name in))
+  (set-port-next-location! in 1 (- chars-in-lang 1) chars-in-lang)
+  (define (error-lexer)
+    (define prompt-tag (make-continuation-prompt-tag))
+    (call-with-continuation-prompt (lambda ()
+                                     (call-with-exception-handler (lambda (x) (abort-current-continuation prompt-tag x))
+                                                                  (lambda () (lexer in))))
+                                                                  prompt-tag
+                                                                  (lambda (v) (let-values ([(line col pos) (port-next-location in)])
+                                                                                (let* ([err-message (vector-ref (struct->vector v) 1)]
+                                                                                       [err-char (substring err-message (- (string-length err-message) 1) (string-length err-message))]
+                                                                                       [loc (car (vector-ref (struct->vector v) 3))]
+                                                                                       [new-loc (srcloc (object-name in)
+                                                                                                (source-location-line loc)
+                                                                                                (source-location-column loc)
+                                                                                                (source-location-position loc)
+                                                                                                (source-location-span loc))])
+                                                                                  
+                                                                                  
+                                                                                (raise (exn:fail:read
+                                                                                            (~a "Lexer failed at the character " err-char)
+                                                                                            (vector-ref (struct->vector v) 2)
+                                                                                            (list new-loc))))))))
+    
+  (let loop ([v (error-lexer)])
+    (if (eq? (token-name (position-token-token v)) 'end-of-file)
+        (list v)
+        (cons v (loop (error-lexer))))))

@@ -1,0 +1,56 @@
+#lang racket
+(require (for-syntax syntax/parse))
+(provide (all-defined-out))
+
+;Boxes essentially implement variable aliasing in Racket.
+;The following can be used to variable alias function parameters,
+;commonly known as "passing by reference"
+
+;;If an argument is already boxed, don't unbox it
+;;just keep its box. If an argument is unboxed, box it
+(define-syntax (expand-arg stx)
+  (syntax-case stx ()
+    [(_ x) (let ([expanded (local-expand #'x 'expression (list #'#%id))])
+             (syntax-parse expanded #:literals(#'#%id)
+               [(#%id a) #'a]
+               [a #'(box a)]))]))
+
+;Boxes bindings
+(define-syntax-rule (#%let ([id binding]) body ... last-body)
+  (let ([id (box binding)]) body ... last-body))
+
+;Boxes the function.
+(define-syntax-rule (#%func name(args ...) body ... last-body)
+  (define name (box (function
+                     (procedure-rename
+                      (lambda (args ...) body ... last-body)
+                      'name)))))
+
+(define-syntax-rule (#%lambda (args ...) body ... last-body)
+  (function (procedure-rename
+             (lambda (args ...) body ... last-body)
+             (string->symbol "anonymous function"))))
+
+(define-syntax-rule (#%reassign id new-value)
+  (set-box! id new-value))
+
+;When an identifier tries to get its value,
+;it will be a box, so we'll unbox it to get
+;the true value
+(define-syntax-rule (#%id x)
+  (unbox x))
+
+
+;Function struct. Should print like regular
+;functions. Used to determine if we're passing
+;in boxes (for references) or regular values
+;when we call #%app
+(define (func-print rec port mode)
+  (begin
+    (write-string "#<procedure" port)
+    ;(write-string (function-name rec) port)
+    (write-string ">" port)))
+
+(struct function (lam)
+  #:methods gen:custom-write
+  [(define write-proc func-print)])

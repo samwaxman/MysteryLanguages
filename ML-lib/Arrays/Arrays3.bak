@@ -1,0 +1,11 @@
+#lang racket
+(require (prefix-in ML- "../Numbers/Numbers1.rkt")
+         "../ML-Helpers.rkt")
+(provide (unprefix-out ML- "../Numbers/Numbers1.rkt")
+         #%array-access
+         #%to-array)
+
+(define #%to-array (lambda list-args (list->vector list-args)))
+
+(define (#%array-access array index)
+  (vector-ref array (modulo index (vector-length array))))

@@ -1,0 +1,103 @@
+#lang racket
+(provide reassign-field record access return-transformer
+         field-condition
+         field-transformer
+         value-transformer
+         set-create-error
+         set-access-error)
+(require "../ML-Helpers.rkt"
+         racket/format
+         racket/stxparam
+         (for-syntax syntax/parse))
+
+(define undefined
+  (syntax-rules () [(x ...) (unbound)]))
+;; place this below
+(define-syntax-parameter return-transformer
+  (syntax-rules () [(x ...) (unbound)]))
+(define-syntax-parameter field-condition
+  (syntax-rules () [(x ...) (unbound)]))
+(define-syntax-parameter field-transformer
+  (syntax-rules () [(x ...) (unbound)]))
+(define-syntax-parameter value-transformer
+  (syntax-rules () [(x ...) (unbound)]))
+
+(define (on-create-bad-field field) (error "Unbound error"))
+(define (on-access-bad-field field) (error "Unbound error"))
+(define (set-create-error new) (set! on-create-bad-field new))
+(define (set-access-error new) (set! on-access-bad-field new))
+
+
+;CREATING THE RECORD STRUCT
+(define-syntax-rule (record-to-string record depth)
+  (let ([eval-record record]
+        [eval-depth depth])
+  (define str "(rec")
+  ;change to list functions and make functional
+  (for-each (lambda (k)
+              (set! str
+                    (string-append str (string-append " " (~my-s k) ":" 
+                                                      (field-to-string eval-depth
+                                                                       (return-transformer (hash-ref! (rec-mapping record) k #f)))))))
+            (rec-order eval-record))
+  (string-append str ")")))
+                         
+(define (field-to-string depth field)
+  (if (and (= depth 3) (rec? field)) (~a "...")
+      (if (rec? field) (record-to-string field (+ depth 1))
+          (~my-s field))))
+(define (rec-print rec port mode)           
+  (write-string (record-to-string rec 0) port))
+(struct rec (mapping order)
+  #:methods gen:custom-write
+  [(define write-proc rec-print)])
+
+;REASSIGN FIELD
+(define-syntax-rule (reassign-field rec field value)
+  (let ([eval-rec rec])
+    (begin
+      (if (rec? eval-rec) (values) (raise-user-error "reassign-field given a non-record as the first argument."))
+      (let-values ([(condition-held? eval-field) (field-condition field)])
+        (let ([field-T (field-transformer eval-field)] [value-T (value-transformer value)])
+          (if condition-held?
+              (begin
+              (hash-update! (rec-mapping eval-rec) field-T
+                            (lambda (_) value-T)
+                            (lambda () (raise-user-error (string-append "Field not found: " (~my-s field-T)))))
+              (return-transformer value-T))
+              (on-access-bad-field field-T)))))))
+
+;Might be better to do error checking before doing the hash-sets and appends tbh.
+;;Same functionality, but contracts should probably checked up front instead of recursively
+(define-syntax (add-field-binding stx*)
+  (syntax-parse stx*
+    [(_ field value map order)
+     ;;If we want this at compile time for the strict ones, it'll need two forms, no doubt about it
+     #'(let-values ([(condition-held? eval-field) (field-condition field)])
+                                
+         (let ([field-T (field-transformer eval-field)] [value-T (value-transformer value)])
+           (if condition-held?
+               (begin
+                 (hash-set! map field-T value-T)
+                 (if (member field-T order) order (append order (list field-T))))
+               (on-create-bad-field field-T))))]
+    ))
+
+(define-syntax-rule (record ([field value]...))
+  (let ([mapping (make-hash)] [order '()])
+    (let* ([order (add-field-binding field value mapping order)] ...)
+      (rec mapping order))))
+
+
+
+(define-syntax-rule (access rec field)
+  (begin
+    (let ([eval-rec rec])
+      (if (rec? eval-rec) (values) (raise-user-error "access given a non-record as the first argument."))
+      (let-values ([(condition-held? eval-field) (field-condition field)])
+        (let ([field-T (field-transformer eval-field)])
+          (if condition-held?
+              (return-transformer
+               (hash-ref! (rec-mapping eval-rec) field-T
+                          (lambda () (raise-user-error (string-append "Field not found: " (~my-s field-T))))))
+              (on-access-bad-field field-T)))))))

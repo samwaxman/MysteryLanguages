@@ -1,0 +1,48 @@
+#lang racket
+(require racket/sandbox)
+(require syntax/strip-context
+         (for-syntax syntax/parse))
+(require "Documents/cs173/MysteryLangs/ML-lib/Parser/FullErrorParser.rkt")
+
+(begin-for-syntax
+  (define constructs-map (make-hash))
+  (hash-set! constructs-map "Numbers" (cons #'(#:+ #:- #:* #:/ #:let) (list 'Num1 'Num2 'Num3))))
+(sandbox-propagate-exceptions #f)
+(sandbox-eval-limits (list #f #f))
+(sandbox-memory-limit #f)
+(sandbox-output 'string)
+(sandbox-error-output 'string)
+(define-syntax (list-classifier-values stx)
+  (syntax-parse stx
+    [(_ language-name classifier)
+     (with-syntax
+         ([(lang ...) (cdr (hash-ref constructs-map (syntax->datum #'language-name)))])
+     #'(let()
+         (define accumulate-answers '())
+         (set! accumulate-answers (cons (get-output (make-evaluator 'lang classifier)) accumulate-answers))
+         ...
+         accumulate-answers))]))
+(define-syntax (answerMatrix stx)
+  (syntax-parse stx
+    [(_ language-name classifiers ...)
+        (with-syntax
+            ([(defined ...)
+              (foldr (lambda (x acc)
+                       (cons x (cons #t acc)))
+                     '()
+                     (syntax->list (car (hash-ref constructs-map (syntax->datum #'language-name)))))])
+          #'(begin (sandbox-reader (lambda (src) (syntax->list (ML-parse src (current-input-port) 'Dummy
+                                                                         defined ...))))
+                   (list (list-classifier-values language-name classifiers) ...)))]))
+
+(sandbox-reader (lambda (src) (syntax->list (ML-parse src (current-input-port) 'Dummy
+                                                                       #:+ #t))))
+(define prompt-tag (make-continuation-prompt-tag))
+(call-with-continuation-prompt (lambda ()
+                                                                                 (call-with-exception-handler
+                                                                                  (lambda (x) (abort-current-continuation prompt-tag x))
+                                                                                  (lambda () (sandbox-reader (lambda (src) (syntax->list (ML-parse src (current-input-port) 'Dummy
+                                                                       #:+ #t))))(make-evaluator 'Num1 "1 +"))))
+                                                                               prompt-tag (lambda (v) (string->symbol (string-append "ERROR: " (vector-ref (struct->vector v) 1) "\n"))))
+
+

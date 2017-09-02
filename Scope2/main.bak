@@ -1,0 +1,11 @@
+#lang racket
+;This prefix is so this module doesn't use the #%module-begin #%top etc
+;defined in those files.
+(require (prefix-in ML- "../ML-lib/Scope/Scope2.rkt")
+         "../ML-lib/ML-Helpers.rkt")
+(provide (unprefix-out ML- "../ML-lib/Scope/Scope2.rkt"))
+
+
+(setup-reader 'Scope2  #:let #:+ #:- #:* #:/
+              #:> #:< #:>= #:<= #:== #:!= #:++
+              #:if #:func #:reassign)

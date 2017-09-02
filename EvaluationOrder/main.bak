@@ -1,0 +1,10 @@
+#lang racket
+(require "../ML-lib/ML-Helpers.rkt")
+(provide #%module-begin #%datum #%top #%app)
+
+;Some of these are advanced, but I made this in the airport without internet so I couldn't check
+(setup-all-reader (EO1 EO2 EO3 EO4)
+                  ("\\------Core 1------\\" "\\------Core 2------\\" "\\------Core 3------\\" "\\------Advanced 1------\\")
+                  #:let #:+ #:- #:* #:/
+                  #:> #:< #:>= #:<= #:== #:!= #:++
+                  #:if #:func #:lambda)

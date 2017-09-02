@@ -1,0 +1,16 @@
+#lang racket
+(require (prefix-in ML- "../AnonymousFunctions/AnonymousFunctions1.rkt")
+         "../ML-Helpers.rkt")
+(provide
+ (unprefix-out ML- "../AnonymousFunctions/AnonymousFunctions1.rkt")
+ #%for
+ list
+ (rename-out [cons? link?]
+             [null? empty?]
+             [car first]
+             [cdr rest]))
+
+;This for has a fresh variable for each run
+(define-syntax-rule (#%for id list body ...)
+  (map (lambda (id) body ...) list))
+
